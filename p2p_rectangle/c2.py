@@ -2,6 +2,39 @@ import socket
 import sys
 import threading
 import re
+from blockchain import Block, Blockchain
+import json
+
+#code for digital signature 
+
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import Encoding
+import cryptography
+
+def rsa_keypair():
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
+    return (private_key, private_key.public_key())
+
+def sign(message, private_key):
+    padding_instance = padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH)
+    return base64.b64encode(private_key.sign(message, padding_instance, hashes.SHA256()))
+
+def verify(message, signature, public_key):
+    sig = base64.b64decode(signature)
+    padding_instance = padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH)
+    try:
+        public_key.verify(sig, message, padding_instance, hashes.SHA256())
+        return True
+    except cryptography.exceptions.InvalidSignature:
+        return False
+
+#digital signature code ends 
 
 rendezvous = ('192.168.56.1', 55555)
 
@@ -55,32 +88,58 @@ if ip2 != '':
 
 print('ready to exchange messages\n')
 
+#creating pvt,pub pairs 
+pvt2, pub2 = rsa_keypair()
+
 
 # listen for incoming messages
 def listen():
     while True:
-        data = sock.recv(1024)
-        normal_msg = re.sub(r'^c\d+c\d+', '', data.decode())
+        datajson = sock.recv(1024)
+        datajson = datajson.decode()
+        fetched_data=json.loads(datajson)
+        fetch_msg=fetched_data['signed_message']
+        topass_key=fetched_data['publickey']
+        normal_msg = re.sub(r'^c\d+c\d+', '', fetch_msg)
+        data=normal_msg
         if normal_msg in msgbox:
             print('dup found')
         else:
             msgbox.append(normal_msg)
-            print('\rneighbor: {}\n> '.format(data.decode()), end='')
+            print('\rneighbor: {}\n> '.format(data), end='')
         pattern = r"^c\d+c\d+.*$"
-        reg_match=re.match(pattern, data.decode())
+        reg_match=re.match(pattern, fetch_msg)
         if not reg_match:
             for neighbor in neighbors:
-                msg='c2'+data.decode()
-                neighbor.send(msg.encode())
+                msg='c2'+data
+                datajson={
+                    'signed_message':msg,
+                    'publickey':topass_key
+                }
+                datajson=json.dumps(datajson)
+                neighbor.send(datajson.encode())
                 print('broadcasted')
+                
+                
 
 listener = threading.Thread(target=listen, daemon=True)
 listener.start()
 
 # send messages to neighbors
+pub_key_bytes = pub2.public_bytes(Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+# Convert bytes to string (optional)
+pub_key_string = pub_key_bytes.decode('utf-8')
 while True:
     msg = input('> ')
-    msg='c2'+msg
+    msg = 'c2'+msg
+    msg=msg.encode()
+    msg = sign(msg, pvt2)
+    msg=msg.decode()
+    datajson={
+        'signed_message':msg,
+        'publickey':pub_key_string
+    }
+    datajson=json.dumps(datajson)
     for neighbor in neighbors:
-        neighbor.send(msg.encode())
+        neighbor.send(datajson.encode())
         print('sent')
