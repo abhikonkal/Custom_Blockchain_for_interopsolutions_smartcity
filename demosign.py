@@ -46,6 +46,7 @@ sig2 = sign(msg, pvt2) # signed with *other* private key
 # print('uyfuyv',x.encode()==sig1)
 
 print(pub1)
+print(type(msg),type(sig1),type(pub1))
 
 res = verify(msg, sig1, pub1)
 print(res)                    # True:  ok...     signed with the private key related to public key pub1
