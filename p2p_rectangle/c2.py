@@ -33,6 +33,11 @@ def verify(message, signature, public_key):
         return True
     except cryptography.exceptions.InvalidSignature:
         return False
+    
+def deserialize_public_key(pub_key_string):
+    pub_key_bytes = pub_key_string.encode('utf-8')
+    pub_key = serialization.load_pem_public_key(pub_key_bytes, backend=default_backend())
+    return pub_key
 
 #digital signature code ends 
 
@@ -98,27 +103,38 @@ def listen():
         datajson = sock.recv(1024)
         datajson = datajson.decode()
         fetched_data=json.loads(datajson)
-        fetch_msg=fetched_data['signed_message']
+        fetch_msg=fetched_data['raw_message']
         topass_key=fetched_data['publickey']
+        sign=fetched_data['sign']
         normal_msg = re.sub(r'^c\d+c\d+', '', fetch_msg)
         data=normal_msg
-        if normal_msg in msgbox:
-            print('dup found')
+        ver_msg=fetch_msg.encode()
+        ver_sign=sign.encode()
+        ver_pub=deserialize_public_key(topass_key)
+        # print(type(ver_msg),type(ver_sign),type(ver_pub))
+        if(verify(ver_msg,ver_sign,ver_pub)):
+            print('Message Succefully verified.')
+            if normal_msg in msgbox:
+                print('dup found')
+            else:
+                msgbox.append(normal_msg)
+                print('\rneighbor: {}\n> '.format(data), end='')
+                pattern = r"^c\d+c\d+.*$"
+                reg_match=re.match(pattern, fetch_msg)
+                if not reg_match:
+                    for neighbor in neighbors:
+                        msg=data
+                        datajson={
+                            'raw_message':msg,
+                            'sign':sign,
+                            'publickey':topass_key
+                        }
+                        datajson=json.dumps(datajson)
+                        neighbor.send(datajson.encode())
+                        # print(datajson)
+                        print('broadcasted')
         else:
-            msgbox.append(normal_msg)
-            print('\rneighbor: {}\n> '.format(data), end='')
-        pattern = r"^c\d+c\d+.*$"
-        reg_match=re.match(pattern, fetch_msg)
-        if not reg_match:
-            for neighbor in neighbors:
-                msg='c2'+data
-                datajson={
-                    'signed_message':msg,
-                    'publickey':topass_key
-                }
-                datajson=json.dumps(datajson)
-                neighbor.send(datajson.encode())
-                print('broadcasted')
+            print('Message Verification Failed!!.Message is Tampered')
                 
                 
 
@@ -132,11 +148,13 @@ pub_key_string = pub_key_bytes.decode('utf-8')
 while True:
     msg = input('> ')
     msg = 'c2'+msg
+    msgbox.append(msg)
     msg=msg.encode()
-    msg = sign(msg, pvt2)
+    signmsg = sign(msg, pvt2)
     msg=msg.decode()
     datajson={
-        'signed_message':msg,
+        'raw_message':msg,
+        'sign':signmsg,
         'publickey':pub_key_string
     }
     datajson=json.dumps(datajson)
