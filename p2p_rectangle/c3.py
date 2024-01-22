@@ -2,7 +2,7 @@ import socket
 import sys
 import threading
 import re
-from blockchain import Block, Blockchain
+import time
 import json
 
 #code for digital signature 
@@ -42,7 +42,7 @@ def deserialize_public_key(pub_key_string):
 
 msgbox=[]
 
-rendezvous = ('192.168.56.1', 55555)
+rendezvous = ('172.25.100.53', 55555)
 
 # connect to rendezvous
 print('connecting to rendezvous server')
@@ -63,11 +63,13 @@ while True:
 
 data = sock.recv(1024).decode()
 print(data)
-ip1, sport1, dport1, ip2, sport2, dport2 = data.split(' ')
+ip1, sport1, dport1, ip2, sport2, dport2 ,self_stake_val,threshold= data.split(' ')
 sport1 = int(sport1)
 dport1 = int(dport1)
 sport2 = int(sport2)
 dport2 = int(dport2)
+self_stake_val=int(self_stake_val)
+threshold=int(threshold)
 
 print('\ngot peers')
 print('  ip1:          {}'.format(ip1))
@@ -76,6 +78,9 @@ print('  dest port1:   {}'.format(dport1))
 print('  ip2:          {}'.format(ip2))
 print('  source port2: {}'.format(sport2))
 print('  dest port2:   {}'.format(dport2))
+print('  self stake value:   {}'.format(self_stake_val))
+print('  threshold:   {}'.format(threshold))
+
 
 # connect to neighbors
 if ip1 != '':
@@ -150,6 +155,14 @@ while True:
     signmsg = sign(msg, pvt3)
     msg=msg.decode()
     datajson={
+        'sender':'c1',
+        'receiver':'c2',
+        'sek_bit':'0',
+        'hash_value':'0',
+        'timestamp':time.time(),
+        'eb_bit':'0',
+        'acc_stack_val':self_stake_val,
+        'node_id':'c1',
         'raw_message':msg,
         'sign':signmsg,
         'publickey':pub_key_string
