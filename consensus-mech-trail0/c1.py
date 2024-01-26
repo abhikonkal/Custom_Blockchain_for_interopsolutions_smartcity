@@ -2,8 +2,8 @@ import socket
 import sys
 import threading
 import re
-#from blockchain import Block, Blockchain
 import json
+import time
 
 #code for digital signature 
 
@@ -42,34 +42,8 @@ def deserialize_public_key(pub_key_string):
 
 #digital signature code ends 
 
-# Add stake to client
-class Client:
-    def __init__(self):
-        self.stake = 1
 
-# Add total_weight and verify_transaction to Blockchain
-class Blockchain:
-    def __init__(self):
-        self.transactions = []
-        self.total_weight = 0
-
-    def verify_transaction(self, transaction, client):
-        # verify the transaction here
-        self.total_weight += client.stake
-        if self.total_weight > 78:
-            self.transactions.append(transaction)
-            self.total_weight = 0
-
-# Add Transaction class
-class Transaction:
-    def __init__(self, sender, receiver, amount, signature):
-        self.sender = sender
-        self.receiver = receiver
-        self.amount = amount
-        self.signature = signature
-
-ipofhost= '192.168.111.1'
-rendezvous = (ipofhost, 55555)
+rendezvous = ('172.25.100.53', 55555)
 
 msgbox=[]
 
@@ -77,7 +51,7 @@ msgbox=[]
 print('connecting to rendezvous server')
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(('0.0.0.0', 50003))
+sock.bind(('0.0.0.0', 50002))
 print('sending')
 sock.sendto(b'0', rendezvous)
 print('sent')
@@ -92,11 +66,13 @@ while True:
 
 data = sock.recv(1024).decode()
 print(data)
-ip1, sport1, dport1, ip2, sport2, dport2 = data.split(' ')
+ip1, sport1, dport1, ip2, sport2, dport2 ,self_stake_val,threshold= data.split(' ')
 sport1 = int(sport1)
 dport1 = int(dport1)
 sport2 = int(sport2)
 dport2 = int(dport2)
+self_stake_val=int(self_stake_val)
+threshold=int(threshold)
 
 print('\ngot peers')
 print('  ip1:          {}'.format(ip1))
@@ -105,6 +81,9 @@ print('  dest port1:   {}'.format(dport1))
 print('  ip2:          {}'.format(ip2))
 print('  source port2: {}'.format(sport2))
 print('  dest port2:   {}'.format(dport2))
+print('  self stake value:   {}'.format(self_stake_val))
+print('  threshold:   {}'.format(threshold))
+
 
 # connect to neighbors
 if ip1 != '':
@@ -125,43 +104,49 @@ pvt1, pub1 = rsa_keypair()
 
 
 # listen for incoming messages
+
+def broadcastemessage(msg):
+    for neighbor in neighbors:
+        neighbor.send(msg.encode())
+
+
 def listen():
     while True:
         datajson = sock.recv(1024)
         datajson = datajson.decode()
         fetched_data=json.loads(datajson)
-        fetch_msg=fetched_data['raw_message']
-        topass_key=fetched_data['publickey']
-        sign=fetched_data['sign']
-        normal_msg = re.sub(r'^c\d+c\d+', '', fetch_msg)
-        data=normal_msg
-        ver_msg=fetch_msg.encode()
-        ver_sign=sign.encode()
-        ver_pub=deserialize_public_key(topass_key)
-        if(verify(ver_msg,ver_sign,ver_pub)):
-            print('Message Verification Succefull')
+        sender_pub_key=fetched_data['publickey']
+        sender_pub_key=deserialize_public_key(sender_pub_key)
+        tx_sign=fetched_data['sign'].encode()
+        tx_msg=fetched_data['raw_message'].encode()
+        normal_msg = re.sub(r'^c\d+c\d+', '', fetched_data['raw_message'])
+        tx_timestamp=fetched_data['timestamp']
+        tx_stake_val=fetched_data['acc_stake_val']
+        og_timestamp=time.time()
+        if og_timestamp-tx_timestamp>60:
+            print('Redirecting to Authority Node for Verification')
+        #add your stake and checek thershold 
+        #if less than threshold then broadcast else add to ledger
+        #if added to ledger then broadcast to neighbors
+        if verify(tx_msg,tx_sign,sender_pub_key):
+            print('Message Verified')
             if normal_msg in msgbox:
                 print('dup found')
+                break
+            new_stake_val=self_stake_val+tx_stake_val
+            if new_stake_val>threshold:
+                #alter stake val in datajson and broad cast
+                fetched_data['acc_stake_val']=new_stake_val
+                datajson=json.dumps(fetched_data)
+                broadcastemessage(datajson)
             else:
-                msgbox.append(normal_msg)
-                print('\rneighbor: {}\n> '.format(data), end='')
-                pattern = r"^c\d+c\d+.*$"
-                reg_match=re.match(pattern, fetch_msg)
-                if not reg_match:
-                    for neighbor in neighbors:
-                        msg=data
-                        datajson={
-                            'raw_message':msg,
-                            'sign':sign,
-                            'publickey':topass_key
-                        }
-                        datajson=json.dumps(datajson)
-                        neighbor.send(datajson.encode())
-                        # print(datajson)
-                        print('broadcasted')
+                #add to ledger and broadcast
+                msgbox.append(datajson)
+                broadcastemessage(datajson)
         else:
             print('Message Verification Failed!!.Message is Tampered')
-                
+
+
                 
 listener = threading.Thread(target=listen, daemon=True)
 listener.start()
@@ -180,11 +165,24 @@ while True:
     signmsg=signmsg.decode()
     msg=msg.decode()
     datajson={
+        'sender':'c1',
+        'receiver':'c2',
+        'sek_bit':'0',
+        'hash_value':'0',
+        'timestamp':time.time(),
+        'eb_bit':'0',
+        'acc_stake_val':self_stake_val,
+        'node_id':'c1',
         'raw_message':msg,
         'sign':signmsg,
-        'publickey':pub_key_string
+        'publickey':pub_key_string,
+        'protocol':'p1'
     }
     datajson=json.dumps(datajson)
     for neighbor in neighbors:
         neighbor.send(datajson.encode())
         print('sent')
+
+
+
+
