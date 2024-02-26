@@ -4,35 +4,55 @@ import socket
 import threading
 import json
 
-def handle_client(client_socket, client_address, clients):
-    with clients_lock:
-        clients.append((client_socket, client_address))
 
-        if len(clients) == 2:
-            # Send client details to each other
-            print('Sending client details to each other')
-            # Send serialized address
-            clients[0][0].send(json.dumps(clients[1][1]).encode())
-            clients[1][0].send(json.dumps(clients[0][1]).encode())
-            print('Clients can now communicate directly')
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind(('0.0.0.0', 1234))
+server.listen(2)
+print('Server listening on port 8888')
 
-def bootstrap_server():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('0.0.0.0', 8888))
-    server.listen(2)
-    print('Server listening on port 8888')
+clients = []
+clients_address = []
 
-    clients = []
-    global clients_lock
-    clients_lock = threading.Lock()
+server.listen(4)
 
-    while True:
-        client_socket, client_address = server.accept()
-        print('Received connection from {}'.format(client_address))
-        client_handler = threading.Thread(
-            target=handle_client,
-            args=(client_socket, client_address, clients)
-        )
-        client_handler.start()
 
-bootstrap_server()
+def handlesending(details,client):
+    #send details of the clients to the clients
+    print(clients)
+    data={
+        "peerdata": [{
+            'ip':details[0][0],
+            'port':details[0][1]
+        },
+        {
+            'ip':details[1][0],
+            'port':details[1][1]
+        }]
+    }
+    data = json.dumps(data)
+    client.send(data.encode())
+    print('sent')
+    client.close()
+    print('closed')
+
+while True:
+    if len(clients)<4:
+        #get clients data and append to clients list
+        client, address = server.accept()
+        clients.append(client)
+        clients_address.append(address)
+        print(f"Connection from {address} has been established.")
+        # print(clients)
+        client.send((b'ready'))
+    
+    if len(clients)==4:
+        #send details of the clients to the clients
+        print('sending')
+        handlesending(details=[clients_address[0],clients_address[3]],client=clients[1])
+        handlesending(details=[clients_address[1],clients_address[2]],client=clients[0])
+        handlesending(details=[clients_address[1],clients_address[2]],client=clients[3])
+        handlesending(details=[clients_address[0],clients_address[3]],client=clients[2])
+        print('sent')
+        break
+        
+

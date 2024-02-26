@@ -4,42 +4,76 @@ import socket
 import threading
 import json
 
-def listen_for_connections(client_socket):
-    while True:
-        try:
-            data = client_socket.recv(1024).decode()
-            print(f"Received data from client 2: {data}")
-            # Add your processing logic here
-        except ConnectionResetError:
-            print("Connection with client 2 closed.")
-            break
+rendezvous = ('172.25.100.53',1234)
 
-def client1():
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect(('127.0.0.1', 8888))
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client.bind(('0.0.0.0', 1235))
+print('Sending connection request to server')
 
-    # Receive details of the other client
+#connect to server
+client.connect((rendezvous))
+
+neighbor=[]
+
+def get_peers():
+    #wait for server to send details of the clients
     data=client.recv(1024).decode()
-    print(data)
-    other_client_address = json.loads(data)
-    print(other_client_address)
-    other_client_address=tuple(other_client_address)
-
-    listening_thread = threading.Thread(target=listen_for_connections, args=(other_client,))
-    listening_thread.start()
+    data = json.loads(data)
+    neighbor.append(data)
+    print('got peers',neighbor)
 
 
-    # Connect to the other client
-    other_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    other_client.connect(other_client_address)
+        
 
-    # Start a thread to listen for connections from the other client
-
+def listen():
+    #accept connection from the other client
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(('0.0.0.0', 1236))
+    listener.listen(2)
+    print('listening')
+    conn, addr = listener.accept()
+    print('connected')
     while True:
-        # Add your client1 main logic here
-        msg=input('>')
-        #send to other client
-        other_client.send(msg.encode())
-        pass
+        data = conn.recv(1024).decode()
+        print('peer : ',data)
+        if not data:
+            break
+    conn.close()
+    
 
-client1()
+
+def sendtopeers(msg):
+    #have temporary sending socket
+    peerdata=neighbor[0]['peerdata']
+    for peer in peerdata:
+        temp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print(peer)
+        ip=peer['ip']
+        port=peer['port']+1
+        temp.connect((ip,port))
+        temp.send(msg.encode())
+        print('sent')
+        # temp.close()
+
+
+print('Connected to server')
+#wait for server to send details of the clients
+data=client.recv(1024).decode()
+if data.strip() == 'ready':
+    print('checked in with server, waiting')
+    get_peers()
+    try:
+        listener = threading.Thread(target=listen, args=(), daemon=True)
+        listener.start()
+    except:
+        print('error')
+    
+
+while True:
+    #connect to the other client
+    msg=input('c1: $ ')
+    sendtopeers(msg)
+    print('sent')
+
+
+

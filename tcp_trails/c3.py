@@ -7,7 +7,7 @@ import json
 rendezvous = ('172.25.100.53',1234)
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.bind(('0.0.0.0', 1237))
+client.bind(('0.0.0.0', 1239))
 print('Sending connection request to server')
 
 #connect to server
@@ -28,7 +28,7 @@ def get_peers():
 def listen():
     #accept connection from the other client
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.bind(('0.0.0.0', 1238))
+    listener.bind(('0.0.0.0', 12310))
     listener.listen(2)
     print('listening')
     conn, addr = listener.accept()
@@ -71,7 +71,7 @@ if data.strip() == 'ready':
 
 while True:
     #connect to the other client
-    msg=input('c2: $ ')
+    msg=input('c3: $ ')
     sendtopeers(msg)
     print('sent')
 
