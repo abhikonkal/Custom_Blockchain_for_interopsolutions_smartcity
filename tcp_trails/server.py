@@ -6,9 +6,8 @@ import json
 
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('0.0.0.0', 1234))
-server.listen(2)
-print('Server listening on port 8888')
+server.bind(('0.0.0.0', 4443))
+print('Server listening on port 4443')
 
 clients = []
 clients_address = []
@@ -18,7 +17,7 @@ server.listen(4)
 
 def handlesending(details,client):
     #send details of the clients to the clients
-    print(clients)
+    # print(clients)
     data={
         "peerdata": [{
             'ip':details[0][0],
