@@ -45,7 +45,7 @@ def deserialize_public_key(pub_key_string):
 
 
 
-rendezvous = ('172.25.100.53',4443)
+rendezvous = ('192.168.109.94',4443)
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.bind(('0.0.0.0', 6300))
@@ -57,7 +57,7 @@ client.connect((rendezvous))
 neighbor=[]
 conn_peers = []
 msgbox = []
-
+threads = []
 
 
 def get_peers():
@@ -68,19 +68,12 @@ def get_peers():
     print('got peers',neighbor)
 
 
-        
-
-def listen():
-    #accept connection from the other client
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.bind(('0.0.0.0', 6301))
-    listener.listen(2)
-    print('listening')
-    conn, addr = listener.accept()
-    print(conn,addr)
+def incoming_peer_handler(conn,addr,counter):
     print('connected')
     while True:
         rawdata = conn.recv(1024).decode()
+        if not rawdata:
+            break
         data = json.loads(rawdata)
         if not data:
             break
@@ -94,10 +87,11 @@ def listen():
             continue
         if verify(msg_to_append.encode(), signature.encode(), sender_pub_key):
             print('verified')
-            print('peer : '+data['sender'],msg_to_append)
+            print('sent by : '+data['sender'],msg_to_append)
+            print(msgbox)
             if msg_to_append not in msgbox:
                 msgbox.append(msg_to_append)
-                print('peer : ',data)
+                # print('peer : ',data)
                 sendtopeers(rawdata)
             else:
                 print('message already received')
@@ -105,6 +99,23 @@ def listen():
             print('Message Verification Failed!!.Message is Tampered')
 
     conn.close()
+        
+
+def listen():
+    #accept connection from the other client
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(('0.0.0.0', 6301))
+    listener.listen(2)
+    print('listening')
+    counter = 0
+    while True:
+        conn,addr=listener.accept()
+        t=threading.Thread(target=incoming_peer_handler,args=(conn,addr,counter),daemon=True)
+        t.start()
+        threads.append(t)
+        counter+=1
+        print('GOt connection from',addr)
+
     
 
 
@@ -120,10 +131,11 @@ def makeconnections(neighbors):
     peerdata = neighbors[0]['peerdata']
     for neighbor in peerdata:
         temp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        temp.connect((neighbor['ip'],neighbor['port']+1))
+        temp.connect((neighbor['ip'],int(neighbor['port'])+1))
         conn_peers.append(temp)
         print('connected to ',neighbor)
     print(conn_peers)
+
 
 
 
@@ -136,6 +148,7 @@ if data.strip() == 'ready':
     try:
         listener = threading.Thread(target=listen, args=(), daemon=True)
         listener.start()
+        time.sleep(2)
     except:
         print('error')
     makeconnections(neighbor)

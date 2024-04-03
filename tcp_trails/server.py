@@ -11,6 +11,7 @@ print('Server listening on port 4443')
 
 clients = []
 clients_address = []
+client_listening_ports = []
 
 server.listen(4)
 
@@ -38,6 +39,7 @@ while True:
     if len(clients)<4:
         #get clients data and append to clients list
         client, address = server.accept()
+        # data=client.recv(1024).decode()
         clients.append(client)
         clients_address.append(address)
         print(f"Connection from {address} has been established.")
