@@ -45,7 +45,7 @@ def deserialize_public_key(pub_key_string):
 
 
 
-rendezvous = ('192.168.109.94',4443)
+rendezvous = ('172.25.109.90',4443)
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.bind(('0.0.0.0', 6100))
@@ -58,6 +58,7 @@ neighbor=[]
 conn_peers = []
 msgbox = []
 threads = []
+self_stake_val=0
 
 
 
@@ -86,18 +87,37 @@ def incoming_peer_handler(conn,addr,counter):
         if my_timestamp - msg_timestamp > 60:
             print('message too old')
             continue
-        if verify(msg_to_append.encode(), signature.encode(), sender_pub_key):
-            print('verified')
-            print('sent by : '+data['sender'],msg_to_append)
-            print(msgbox)
-            if msg_to_append not in msgbox:
-                msgbox.append(msg_to_append)
-                # print('peer : ',data)
-                sendtopeers(rawdata)
+        if data['protocol'] == 'p1':
+            if self_stake_val < data['acc_stack_val']:
+                print('No authority to verify the message')
+                continue
             else:
-                print('message already received')
+                print('Authority to verify the message')
+                if verify(msg_to_append.encode(), signature.encode(), sender_pub_key):
+                    print('verified')
+                    print('sent by : '+data['sender'],msg_to_append)
+                    data['acc_stack_val'] = data['acc_stack_val'] + self_stake_val
+                    print(msgbox)
+                    if msg_to_append not in msgbox:
+                        msgbox.append(msg_to_append)
+                        # print('peer : ',data)
+                        sendtopeers(rawdata)
+                    else:
+                        print('message already received')
+                else:
+                    print('Message Verification Failed!!.Message is Tampered')
         else:
-            print('Message Verification Failed!!.Message is Tampered')
+            #on ledger justiong adding to the message box
+            if verify(msg_to_append.encode(), signature.encode(), sender_pub_key):
+                print('verified')
+                print('sent by : '+data['sender'],msg_to_append)
+                print(msgbox)
+                if msg_to_append not in msgbox:
+                    msgbox.append(msg_to_append)
+                    # print('peer : ',data)
+                    sendtopeers(rawdata)
+                else:
+                    print('message already received')
 
     conn.close()
         
@@ -130,12 +150,13 @@ def sendtopeers(msg):
 def makeconnections(neighbors):
     #connect to the other clients
     peerdata = neighbors[0]['peerdata']
+    self_stake_val=neighbors[0]['stakevalue']
+    print("self stake value is ",self_stake_val,"\n")
     for neighbor in peerdata:
         temp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         temp.connect((neighbor['ip'],int(neighbor['port'])+1))
         conn_peers.append(temp)
         print('connected to ',neighbor)
-        
     print(conn_peers)
 
 
@@ -165,6 +186,9 @@ self_stake_val = 20
 while True:
     #connect to the other client
     msg=input('c2: $ ')
+    if msg=="showledger":
+        print(msgbox)
+        continue
     msgbox.append(msg)
     msg = msg.encode()
     signature = sign(msg, my_private_key)
@@ -172,7 +196,6 @@ while True:
     signature = signature.decode()
     datajson={
         'sender':'c2',
-        'receiver':'',
         'sek_bit':'0',
         'hash_value':'0',
         'timestamp':time.time(),
@@ -181,7 +204,8 @@ while True:
         'node_id':'c2',
         'raw_message':msg,
         'sign':signature,
-        'publickey':pub_key_string
+        'publickey':pub_key_string,
+        'protocol':'p1'
     }
     datajson=json.dumps(datajson)
     sendtopeers(datajson)
