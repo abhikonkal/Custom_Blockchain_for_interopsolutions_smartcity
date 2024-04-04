@@ -150,6 +150,7 @@ def sendtopeers(msg):
 def makeconnections(neighbors):
     #connect to the other clients
     peerdata = neighbors[0]['peerdata']
+    global self_stake_val
     self_stake_val=neighbors[0]['stakevalue']
     print("self stake value is ",self_stake_val,"\n")
     for neighbor in peerdata:
@@ -182,7 +183,7 @@ my_private_key, my_public_key = rsa_keypair()
 pub_key_bytes = my_public_key.public_bytes(Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
 pub_key_string = pub_key_bytes.decode('utf-8')
 
-self_stake_val = 20
+
 while True:
     #connect to the other client
     msg=input('c2: $ ')

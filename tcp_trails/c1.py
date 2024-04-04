@@ -90,6 +90,7 @@ def incoming_peer_handler(conn,addr,counter):
         if data['protocol'] == 'p1':
             if self_stake_val < data['acc_stack_val']:
                 print('No authority to verify the message')
+                # sendtopeers(rawdata)
                 continue
             else:
                 print('Authority to verify the message')
