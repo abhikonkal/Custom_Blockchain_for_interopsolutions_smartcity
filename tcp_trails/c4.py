@@ -4,7 +4,7 @@ import socket
 import threading
 import json
 import time
-
+import random
 
 #code for digital signature 
 
@@ -43,9 +43,70 @@ def deserialize_public_key(pub_key_string):
 
 #digital signature code ends 
 
+class TreeNode:
+    def __init__(self, message, parent=None):
+        self.message = message
+        self.children = []
+        self.parents = []  # List to store parent nodes
+
+    def add_child(self, child):
+        self.children.append(child)
+
+    def add_parent(self, parent):
+        self.parents.append(parent)
+
+    def get_children(self):
+        return self.children
+
+    def get_parents(self):
+        return self.parents
+
+def add_message_to_tree(message):
+    global message_tree
+    if message_tree is None:
+        message_tree = TreeNode(message)
+    elif message_tree.get_children() == []:
+        # For the first message, it will become a child of the genesis node
+        new_node = TreeNode(message)
+        message_tree.add_child(new_node)
+    elif len(message_tree.get_children()) == 1:
+        # For the second message, it will become a child of the second genesis node
+        new_node = TreeNode(message)
+        message_tree.add_child(new_node)
+        message_tree.get_children()[0].add_parent(new_node)
+    else:
+        new_node = TreeNode(message)
+        # Randomly select two parent nodes from existing nodes
+        parent_nodes = random.sample(message_tree.get_children(), 2)
+        for parent in parent_nodes:
+            parent.add_child(new_node)
+            new_node.add_parent(parent)
+        message_tree.add_child(new_node)
 
 
-rendezvous = ('127.0.0.1',4443)
+def search_message_tree(node, message):
+    if node is None:
+        return False
+    if node.message == message:
+        return True
+    for child in node.get_children():
+        if search_message_tree(child, message):
+            return True
+    return False
+
+def print_message_tree(node, depth=0):
+    if node is None:
+        return
+    print("  " * depth + node.message)
+    # Display parent nodes
+    if node.get_parents():
+        print("  " * (depth + 1) + "Parents:")
+        for parent in node.get_parents():
+            print("  " * (depth + 2) + parent.message)
+    for child in node.get_children():
+        print_message_tree(child, depth + 1)
+
+rendezvous = ('172.25.100.57',4443)
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.bind(('0.0.0.0', 6300))
@@ -57,6 +118,7 @@ client.connect((rendezvous))
 neighbor=[]
 conn_peers = []
 msgbox = []
+message_tree = None
 threads = []
 self_stake_val=0
 lock=threading.Lock()
@@ -73,6 +135,7 @@ def get_peers():
 def incoming_peer_handler(conn,addr,counter):
     print('connected')
     # buffer=b''
+    global message_tree
     while True:
         rawdata = conn.recv(1024).decode()
         if not rawdata:
@@ -104,8 +167,8 @@ def incoming_peer_handler(conn,addr,counter):
                         data['protocol'] = 'p2'
                     lock.release()
                     # print(msgbox)
-                    if msg_to_append not in msgbox:
-                        msgbox.append(msg_to_append)
+                    if not search_message_tree(message_tree, msg_to_append):
+                        add_message_to_tree(msg_to_append)
                         # print('peer : ',data)
                         rawdata = json.dumps(data)
                         sendtopeers(rawdata)
@@ -118,9 +181,9 @@ def incoming_peer_handler(conn,addr,counter):
             if verify(msg_to_append.encode(), signature.encode(), sender_pub_key):
                 print('verified')
                 print('sent by : '+data['sender'],msg_to_append)
-                print(msgbox)
-                if msg_to_append not in msgbox:
-                    msgbox.append(msg_to_append)
+                print_message_tree(message_tree)
+                if not search_message_tree(message_tree, msg_to_append):
+                    add_message_to_tree(msg_to_append)
                     # print('peer : ',data)
                     sendtopeers(rawdata)
                 else:
@@ -196,7 +259,7 @@ while True:
     #connect to the other client
     msg=input('c4: $ ')
     if msg=="showledger":
-        print(msgbox)
+        print_message_tree(message_tree)
         continue
     msg = msg.encode()
     signature = sign(msg, my_private_key)
